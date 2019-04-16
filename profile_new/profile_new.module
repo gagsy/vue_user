@@ -1,0 +1,713 @@
+<?php
+
+function profile_new_menu()
+{
+
+    $items['profile-new/%'] = array(
+		'access callback' => 'user_is_anonymous',
+        'page callback' => 'profile_new',
+		'page arguments' => array(
+		1,
+		),
+    );
+    
+    $items['get_pro_new/%'] = array(
+		'access callback' => 'user_is_anonymous',
+        'page callback' => 'get_pro_new',
+		'page arguments' => array(
+		1,
+		),
+    );
+    
+    
+
+    return $items;
+}
+
+function profile_new()
+{
+	return theme('profile_new', array('test'=>'hi'));
+	
+
+}
+
+function get_pro_new()
+{
+	header("Access-Control-Allow-Origin: *");
+	header("Content-Type: application/json; charset=UTF-8");
+	//return theme('profile_new', array('test'=>'hi'));
+	global $bucket_url;
+	$bucket_url='https://s3-us-west-1.amazonaws.com/peopleworld/pictures';
+	$puser= user_load_by_name(arg(1));
+	if($puser->data['imagename'])
+	{
+		$user_im= $bucket_url.'/'.$puser->data['imagename'];
+	}
+	else
+	{
+		$profile_picture_url = ltrim(variable_get('user_picture_default', ''), '/'); //PATCH: using the ltrim to get rid of any leading '/'
+		$profile_picture_url    = file_create_url($profile_picture_url);
+		$user_im= $profile_picture_url;
+	}
+	if(arg(1)=='neothink')
+	{
+		$variables['user_profile']['link_left']  = base_url().'profile-new/jill';
+		$variables['user_profile']['link_right'] = base_url().'profile-new/digger';
+	}
+	if(arg(1)=='digger' || arg(1)=='Digger')
+	{
+		$variables['user_profile']['link_left'] = base_url().'profile-new/neothink';
+		$variables['user_profile']['link_right']= base_url().'profile-new/jill';
+	}
+	
+	if(arg(1)=='jill' || arg(1)=='Jill')
+	{
+		$variables['user_profile']['link_left']= base_url().'profile-new/digger';
+		$variables['user_profile']['link_right']= base_url().'profile-new/neothink';
+	}
+	
+	
+	global $bucket_url;
+	$bucket_url='https://s3-us-west-1.amazonaws.com/peopleworld/pictures';
+    //$puser = $variables['elements']['#account']; 
+	
+	
+    $lang = (!empty($puser->language))?$puser->language:'und';
+    
+    
+    
+    //echo 'kkkkk'.$puser->field_birthday[$lang][0]['value'].'mmmm';
+	//echo(date("M jS ,Y",$puser->field_birthday[$lang][0]['value']));
+	
+
+    unset($variables['user_profile']['user_profile_comments']['#title']);
+    $variables['user_profile']['profile_menu'] = false;
+    $variables['user_profile']['edit_profile'] = false;
+	$variables['user_profile']['field_political_party'] = $puser->field_political_party[$lang][0]['value'];
+	$variables['user_profile']['field_religion'] = $puser->field_religion[$lang][0]['value'];
+	
+	$variables['user_profile']['field_first_name'] = $puser->field_first_name['und'][0]['value'];
+	$variables['user_profile']['field_last_name'] = $puser->field_last_name['und'][0]['value'];
+	
+	
+	$residential_location = $puser->field_residential_location;
+    $addr_string = array();
+    if(!empty($residential_location[$lang][0]['locality'])){
+        $addr_string[] = $residential_location[$lang][0]['locality'];
+    }
+    if(!empty($residential_location[$lang][0]['administrative_area'])){
+        $addr_string[] = $residential_location[$lang][0]['administrative_area'];
+    }
+    if(!empty($residential_location[$lang][0]['country'])){
+        include_once DRUPAL_ROOT . '/includes/iso.inc';
+        $countries	= _country_get_predefined_list();
+        $addr_string[] = $countries[$residential_location[$lang][0]['country']];
+    }
+
+    $variables['user_profile']['field_residential_location'] = implode(', ', $addr_string);	
+
+    
+	
+	//echo '<pre>lllllllllll';
+	
+	
+	  unset($variables['user_profile']['field_gender']);
+        $variables['user_profile']['profile_menu'] = true;
+        $variables['user_profile']['account_id'] = $puser->uid;
+		
+		
+		/*For birthday privacy*/
+		$fieldInfo_field_birthday = field_info_field('field_birthday');
+		
+		$field_birthday_privacy = _user_field_privacy_value($fieldInfo_field_birthday['id'], $puser->uid);
+		$variables['user_profile']['field_birthday_privacy'] = $field_birthday_privacy; 
+		$variables['user_profile']['field_birthday'] = date("F jS, Y",$puser->field_birthday[$lang][0]['value']); 
+		//echo $field_birthday_privacy;die;
+		//Loading to get field Id
+		$fieldInfo_field_political_party = field_info_field('field_political_party');
+		$field_political_partyIsPrivate = _user_field_privacy_value($fieldInfo_field_political_party['id'], $puser->uid);
+		if($field_political_partyIsPrivate){
+			$variables['user_profile']['field_political_party'] = "";
+		}
+		//Loading to get field Id
+		$fieldInfo_field_religion = field_info_field('field_religion');
+		$field_religionIsPrivate = _user_field_privacy_value($fieldInfo_field_religion['id'], $puser->uid);
+		if($field_religionIsPrivate){
+			$variables['user_profile']['field_religion'] = "";
+		}
+		
+		$fieldInfo_field_residential_location = field_info_field('field_residential_location');
+		$field_residential_locationIsPrivate = _user_field_privacy_value($fieldInfo_field_residential_location['id'], $puser->uid);
+		if($field_residential_locationIsPrivate){
+		$variables['user_profile']['field_residential_location'] = "";
+		}
+		$variables['user_profile']['field_residential_location_privacy'] = $field_residential_locationIsPrivate;
+		$reader = flag_get_flag('add_reader');
+
+		$flag_counts = flag_get_counts('user', $puser->uid);
+
+		$nid = $puser->uid;
+		$node_title = db_query('SELECT * FROM {flagging} WHERE entity_id = :nid and fid=:fid', array(':nid' => $nid,':fid'=> '9'));
+		//$node_title = db_query('SELECT * FROM {flagging} WHERE (entity_id = :nid and fid=:fid) OR (uid= :uid and fid=:fid)', array(':nid' => $nid,':fid'=> '9',':uid' => $user->uid));
+		
+		$r_count = db_query("select nid from {node} where uid = ".$nid." AND type = 'my_status'")->fetchField();
+		//die;
+		
+		if(!empty($r_count))
+		{
+			$nid = $r_count;
+			$node = node_load($nid);
+			
+			/*echo 'llllllllllllllllllllllllllll- count=<pre>';
+			print_r($node);
+			echo  $r_count;
+			die;*/
+			$variables['user_profile']['looking_for_love']  = trim($node->field_looking_for_love['und'][0]['value']);
+			$variables['user_profile']['looking_for_work']  =trim($node->field_looking_for_work['und'][0]['value']);
+			$variables['user_profile']['looking_for_job']  =trim($node->field_looking_for_dream_job['und'][0]['value']);
+			$variables['user_profile']['looking_to_hire']  =trim($node->field_looking_to_hire['und'][0]['value']);
+			$variables['user_profile']['field_y_love']  = $node->field_y_love['und'][0]['value'];
+			$variables['user_profile']['field_y_work']  = $node->field_y_work['und'][0]['value'];
+			$variables['user_profile']['field_y_job']  = $node->field_y_job['und'][0]['value'];
+			$variables['user_profile']['field_y_hire']  = $node->field_y_hire['und'][0]['value'];
+			if($node->field_looking_for_love['und'][0]['value'] !='')
+			{
+				$variables['user_profile']['field_y_love']='Yes';
+			}
+			else
+			{
+				$variables['user_profile']['field_y_love']='No';
+			}
+			
+			if($node->field_looking_for_work['und'][0]['value'] !='')
+			{
+				$variables['user_profile']['field_y_work']='Yes';
+			}
+			else
+			{
+				$variables['user_profile']['field_y_work']='No';
+			}
+			
+			if($node->field_looking_for_dream_job['und'][0]['value'] !='')
+			{
+				$variables['user_profile']['field_y_job']='Yes';
+			}
+			else
+			{
+				$variables['user_profile']['field_y_job']='No';
+			}
+			
+			if($node->field_looking_to_hire['und'][0]['value'] !='')
+			{
+				$variables['user_profile']['field_y_hire']='Yes';
+			}
+			else
+			{
+				$variables['user_profile']['field_y_hire']='No';
+			}
+			
+			
+		}
+		else
+		{
+			$variables['user_profile']['looking_for_love']  = '';
+			$variables['user_profile']['looking_for_work']  ='';
+			$variables['user_profile']['looking_for_job']  ='';
+			$variables['user_profile']['looking_to_hire']  ='';
+			$variables['user_profile']['field_y_love']  = "No";
+			$variables['user_profile']['field_y_work']  = "No";
+			$variables['user_profile']['field_y_job']  = "No";
+			$variables['user_profile']['field_y_hire']  = "No";
+		}
+		
+		$nid = $puser->uid;
+
+		$user_id= array();
+		foreach($node_title as $record)
+		{
+			$user_id[]= $record->uid;
+		}
+		//echo '<pre>';
+		//print_r(array_unique($user_id));die;
+		$user_id = array_unique($user_id);
+		$user_detail = array();
+		if(!empty($user_id))
+		{
+			$i=0;
+			foreach($user_id as $user_id)
+			{
+				$user_array=user_load($user_id);
+				//echo '<pre>';
+				
+				if($puser->uid != $user_array->uid)
+				{
+					$user_detail[$i]['username']=$user_array->name;
+					$user_detail[$i]['uid']=$user_array->uid;
+					$user_detail[$i]['firstname']= ucfirst($user_array->field_first_name['und'][0]['value']);
+					$user_detail[$i]['lastname']= ucfirst($user_array->field_last_name['und'][0]['value']);
+					$user_detail[$i]['image']= $bucket_url.'/'.$user_array->data['imagename'];
+					
+					if($user_array->data['imagename'] !='')
+					{
+						$user_detail[$i]['image']= $bucket_url.'/'.$user_array->data['imagename'];
+					}
+					else{
+						$profile_picture_url = ltrim(variable_get('user_picture_default', ''), '/'); //PATCH: using the ltrim to get rid of any leading '/'
+						$profile_picture_url    = file_create_url($profile_picture_url);
+						 $user_detail[$i]['image']=$profile_picture_url;
+					}
+				
+				
+				$result = db_select('comment')
+				->fields('comment', array('cid'))
+				->condition('uid', $user_array->uid, '=')
+				->orderBy('created', 'DESC')
+				->execute();
+
+				$cids = $result->fetchCol();
+				$comments=comment_load_multiple($cids);
+				//echo '<pre>';
+				//print_r($comments);die; 
+				$user_detail[$i]['comment']='';
+				$user_detail[$i]['cid']='';
+				$user_detail[$i]['nid']='';
+				if(!empty($comments))
+				{
+					$key =array_keys($comments);
+					$p_comment = $comments[$key[0]]->comment_body['und'][0]['value'];
+					$string = substr($p_comment,0,120);
+					$string = substr($string,0,strrpos($string," "));
+					//$user_detail[$i]['comment']=$p_comment;
+					$user_detail[$i]['cid']=$comments[$key[0]]->cid;
+					$user_detail[$i]['nid']=$comments[$key[0]]->nid;
+					$u_node=node_load($comments[$key[0]]->nid);
+					
+					$user_detail[$i]['u_uid']=$u_node->uid;
+					if(str_word_count($comments[$key[0]]->comment_body['und'][0]['value']) >15)
+					{
+						$user_detail[$i]['comment']=$string;
+					}
+					else
+					{
+						$user_detail[$i]['comment']=$comments[$key[0]]->comment_body['und'][0]['value'];
+					}
+				}
+				}
+				$i++;
+				
+			}
+			$cid = array();
+			
+			foreach ($user_detail as $key => $row) {
+				$cid[$key] = $row['cid'];
+			}
+			array_multisort($cid, SORT_DESC, $user_detail); 
+			$variables['user_profile']['user_detail'] = $user_detail;
+		}
+		$u_happ= array();
+		$full_name=array();
+		$k=0;
+		Foreach($user_detail as $hap)
+		{
+			
+			if(!empty($hap['comment']))
+			{
+				$u_happ[$k] =$hap;
+				$u_happ[$k]['fullname'] =$hap['firstname'].' '.$hap['lastname'];
+				$u_happ[$k]['rfullname'] ='';
+				$u_happ[$k]['rusername'] ='';
+				
+				if($hap['uid'] !=$hap['u_uid'])
+				{
+					$r_user = user_load($hap['u_uid']);
+					$full_name = ucfirst($r_user->field_first_name['und'][0]['value']).' '.ucfirst($r_user->field_last_name['und'][0]['value']);
+					$rusername =$r_user->name;
+					
+					$u_happ[$k]['rfullname'] =$full_name;
+					$u_happ[$k]['rusername'] =$rusername;
+				}
+				$k++;
+				 $word_c_count += str_word_count($hap['comment']);
+				 if(($word_c_count>100 || $k==6))
+				{
+					break;
+				}
+			}
+			
+		}
+		$variables['user_profile']['user_detail'] = $u_happ;
+		$variables['user_profile']['other_user'] = 1;
+		//echo '<pre>';
+		//print_r($account);die;
+		$variables['user_profile']['bucket_url'] = $bucket_url;
+		$variables['user_profile']['pics_video'] = $puser->data['pics_video'];
+		$my_pics=array();
+		$cpics=0;
+		foreach($puser->data['pics_video'] as $pics_video)
+		{
+			$my_pics[$cpics] =$bucket_url.'/'.$pics_video;
+			$cpics++;
+			if($cpics==6)
+				break;
+		}
+		$variables['user_profile']['pics_video'] = $my_pics;
+	$variables['user_profile']['loggedIn_user_id']  = $puser->uid;
+    $variables['user_profile']['profile_user_id']   = $puser->uid;
+    $variables['user_profile']['username']   = $puser->name;
+	
+    if (!empty($puser->picture)) {
+        $profile_picture_url = @image_style_url('large', $puser->picture->uri);
+		$userpic = $puser->picture;
+		$profile_picture_url = $bucket_url.'/'.$userpic->filename;
+    }
+    else if (variable_get('user_picture_default', '')) {
+        $profile_picture_url = ltrim(variable_get('user_picture_default', ''), '/'); //PATCH: using the ltrim to get rid of any leading '/'
+        $profile_picture_url    = file_create_url($profile_picture_url);
+    }
+	$sesimagename='';
+	$sesimagename  = $puser->data['imagename'];
+	if($sesimagename!='')
+	{
+		$profile_picture_url = $bucket_url.'/'.$sesimagename;
+	}
+    $variables['user_profile']['field_profile_picture_caption'] = $puser->field_profile_picture_caption[$lang][0]['value'];
+	$variables['user_profile']['field_nickname'] = $puser->field_nickname[$lang][0]['value'];
+
+    $residential_location = $puser->field_residential_location;
+    $addr_string = array();
+    if(!empty($residential_location[$lang][0]['locality'])){
+        $addr_string[] = $residential_location[$lang][0]['locality'];
+    }
+    if(!empty($residential_location[$lang][0]['administrative_area'])){
+        $addr_string[] = $residential_location[$lang][0]['administrative_area'];
+    }
+    if(!empty($residential_location[$lang][0]['country'])){
+        include_once DRUPAL_ROOT . '/includes/iso.inc';
+        $countries	= _country_get_predefined_list();
+        $addr_string[] = $countries[$residential_location[$lang][0]['country']];
+    }
+
+    $variables['user_profile']['field_residential_location'] = implode(', ', $addr_string);
+
+    $variables['user_profile']['profile_picture_url'] = $profile_picture_url;
+    $variables['user_profile']['loading_picture_url'] = file_create_url(path_to_theme().'/images/loader.gif');
+
+	
+    //User Article
+    $user_article = @$variables['elements']['User Article'];
+
+    $strip_list     = array('img', 'iframe');
+    //This is Me - My Soul
+    $profile_this_is_me = $user_article['profile_this_is_me'];
+    //print_r($variables);
+    $thisIsMeBody       = $puser->profile_this_is_me;
+    //Find out the Title attribute of the image and add as a caption
+    $thisIsMeBody_captionadded   = add_image_caption($thisIsMeBody);
+	//$thisIsMeBody_captionadded = str_replace("src", "ng-src", $thisIsMeBody_captionadded);
+    $thisIsMeSummary    = strip_only($thisIsMeBody, $strip_list);
+
+    $thisIsMeSummary    = truncateHtml($thisIsMeSummary, 300);
+
+    $thisIsMeLabel      = empty($profile_this_is_me['#title'])?t('This is Me - My Soul'):$profile_this_is_me['#title'];
+    $thisIsMeHelpTxt    = t('My Interests/Hobbies/Passions/Pursuits');
+
+    $variables['user_profile']['fields']['profile_this_is_me']['summary']    = $thisIsMeSummary;
+    $variables['user_profile']['fields']['profile_this_is_me']['body']       = $thisIsMeBody_captionadded;
+    $variables['user_profile']['fields']['profile_this_is_me']['label']      = $thisIsMeLabel;
+    $variables['user_profile']['fields']['profile_this_is_me']['helpTxt']    = $thisIsMeHelpTxt;
+
+
+    //This is My story
+    $thisIsMyStory          = $user_article['profile_this_is_my_story'];
+    $profile_this_is_my_story = str_replace("http://", "https://", $puser->profile_this_is_my_story);
+    //$profile_this_is_my_story = str_replace("src", "ng-src", $puser->profile_this_is_my_story);
+    $thisIsMyStoryBody      = $profile_this_is_my_story;
+    //Find out the Title attribute of the image and add as a caption
+    $thisIsMyStoryBody_captionadded      = add_image_caption($thisIsMyStoryBody);
+
+
+    $thisIsMyStorySummary   = strip_only($thisIsMyStoryBody, $strip_list);
+    $thisIsMyStorySummary   = truncateHtml($thisIsMyStorySummary, 300);
+    $thisIsMyStoryLabel     = empty($thisIsMyStory['#title'])?t('This is My Story - My Life'):$thisIsMyStory['#title'];
+    $thisIsMyStoryHelpTxt   = t('My Early Life/Career/Personal Life/Accomplishments');
+
+    $variables['user_profile']['fields']['profile_this_is_my_story']['summary']    = $thisIsMyStorySummary;
+    $variables['user_profile']['fields']['profile_this_is_my_story']['body']       = $thisIsMyStoryBody_captionadded;
+    $variables['user_profile']['fields']['profile_this_is_my_story']['label']      = $thisIsMyStoryLabel;
+    $variables['user_profile']['fields']['profile_this_is_my_story']['helpTxt']    = $thisIsMyStoryHelpTxt;
+
+    //Education
+    $education  = $puser->field_education;
+    $education  = $education[$lang][0]['value'];
+	//echo $education;die;
+    if($education == t("Graduated High School") || $education == t("Some College")){
+        $variables['user_profile']['field_education'] = $puser->field_high_school_name[$lang][0]['value'].", ".$puser->field_high_school_year[$lang][0]['value'];
+    }
+    else if($education == t("Graduated College") || $education == t("Some Graduate School") || $education == t("Completed Graduate School") ){
+         $high_school = $puser->field_high_school_name[$lang][0]['value'].", ".$puser->field_high_school_year[$lang][0]['value'];
+
+        $college_information = common_get_field_collection_value('field_college', $puser, $lang);
+        $variables['user_profile']['field_education'] = $high_school. "<br>".$college_information;
+
+        if($education == t("Completed Graduate School")){
+            $graduate_information = common_get_field_collection_value('field_graduate', $puser, $lang);
+            $variables['user_profile']['field_education'] = $high_school. "<br>".$college_information."<br>".$graduate_information;
+        }
+    }
+	
+    //Marital Status
+    $marital_status  = $puser->field_marital_status;
+    $marital_status  = $marital_status[$lang][0]['value'];
+	$variables['user_profile']['field_marital_status'] = $marital_status;
+	$variables['user_profile']['field_occupation'] = $puser->field_occupation[$lang][0]['value'];
+    if($marital_status == t('Married')){
+
+        $current_spouse         = $puser->field_current_spouse[$lang][0]['value'];
+        $current_spouse_from    = $puser->field_current_spouse_from_year[$lang][0]['value'];
+        if(!empty($current_spouse) && !empty($current_spouse_from)){
+            $current_spouse = $current_spouse." (".$current_spouse_from." - Present)<br>";
+        }else{
+            $current_spouse = "";
+        }
+
+        $former_spouses = common_get_field_collection_value('field_former_spouse', $puser, $lang);
+        $variables['user_profile']['spouses'] = $current_spouse.$former_spouses;
+
+    }
+    else if($marital_status == t('Divorced or Widowed')){
+        $former_spouses = common_get_field_collection_value('field_former_spouse', $puser, $lang);
+        $deceased_spouses = common_get_field_collection_value('field_deceased_spouse', $puser, $lang);
+        $spouses_string = $former_spouses;
+        if(!empty($deceased_spouses)){
+            $spouses_string .= "<br>$deceased_spouses";
+        }
+        $variables['user_profile']['spouses'] = $spouses_string;
+    }
+
+    $children = $puser->field_children;
+	$children = $children[$lang][0]['value'];
+	$variables['user_profile']['field_children'] = '';
+
+	if($children == 1){
+		$childrenCountIsPrivate = 0;
+
+		
+
+            //Loading to get field Id
+            $fieldInfo = field_info_field('field_children_count');
+            $childrenCountIsPrivate = _user_field_privacy_value($fieldInfo['id'], $puser->uid);
+	    
+
+		if(!$childrenCountIsPrivate){
+			$child_names = $puser->field_child_names;
+			$name_string = "";
+			if(isset($child_names[$lang])){
+				foreach($child_names[$lang] as $child_values){
+					$name_string .= $child_values['value']. ", ";
+				}
+				$name_string = rtrim($name_string, ', ');
+				if(empty($name_string)){                    $variables['user_profile']['field_children'] = $puser->field_children_count[$lang][0]['value'];                }else{                    $variables['user_profile']['field_children'] = $name_string;                }
+			}
+		}
+
+	}
+
+    $ref = $puser->field_references;
+    $references = array();
+    if(isset($ref[$lang])){
+        foreach($ref[$lang] as $key => $values){
+            $ref_val = $values['value'];
+            if(!empty($ref_val)){
+                $references[] = $ref_val;
+            }
+        }
+        $rc=1;
+        foreach($references as $key => $ref_value){
+		
+		$references[]['reference']='<p>'. $rc.'.' . '&nbsp;&nbsp;' .make_clickable($ref_value).'</p>';
+		$rc++;
+		} 
+        
+        $variables['user_profile']['field_references'] = $references;
+    }
+
+
+    //External Links
+
+    //fetch field values of field_collection type
+    $userObject = $puser;
+    $fieldCollectionFields  = array('field_additional_field');
+    foreach($fieldCollectionFields as $fieldName){
+        $collectionItems    = $userObject->$fieldName;
+        if(isset($collectionItems[$lang])){
+            $collectionItems    = $collectionItems[$lang];
+            foreach($collectionItems as $cItemKey => $item){
+                $collectionId   = $item['value'];
+                $itemObject = entity_load('field_collection_item', array($collectionId));
+
+                $collectionItemFields   = array('field_label', 'field_value');
+                foreach($collectionItemFields as $collectionFieldName){
+
+                    if(isset($itemObject[$collectionId]->$collectionFieldName)){
+                        $fieldArr   = $itemObject[$collectionId]->$collectionFieldName;
+                        if(!empty($fieldArr)){
+                            $profileFieldValues[$fieldName][$cItemKey][$collectionFieldName] = $fieldArr[$lang][0]['value'];
+                        }
+                    }
+                }
+            }
+        }
+        else{
+            $profileFieldValues[$fieldName] = array();
+        }
+    }
+
+    $variables['user_profile']['field_external_link'] = $profileFieldValues['field_external_link'];
+    $variables['user_profile']['field_additional_field'] = $profileFieldValues['field_additional_field'];
+	//echo '<pre>';
+	//		print_r($variables);die;
+	
+	if(isset($puser->data['additional_field']))
+	{
+		$user_additional_val =$puser->data['additional_field'];
+		$variables['user_profile']['field_additional_field']=$user_additional_val;
+		
+	}
+	//
+	if(empty($variables['user_profile']['field_external_link']))
+	{
+		$variables['user_profile']['field_external_link']=get_field_val('external_link',$puser->uid);
+		//print_r($variables['user_profile']['field_external_link']);die;
+	}
+	//if($variables['user_profile']['field_additional_field']=='')
+	//{
+		$variables['user_profile']['field_additional_field']=get_field_val('additional_field',$puser->uid);
+		
+	//}
+	
+	if($college_information=='' && ($education != t("Some High School")))
+	{
+		$college = get_field_val('college',$puser->uid);
+			if(!empty($college))
+			{
+			$value_string = for_college_graduate($college);
+			$variables['user_profile']['field_education'] = $high_school. "<br>".$value_string;
+			$college_information =$value_string;
+			}
+			
+	}
+	//echo $education;die;
+if($graduate_information=='' && ($education != t("Some High School")) )
+	{
+		$graduate = get_field_val('graduate',$puser->uid);
+			if(!empty($graduate))
+			{
+			$value_string = for_college_graduate($graduate);
+			$variables['user_profile']['field_education'] = $high_school. "<br>".$college_information."<br>".$value_string;
+			}
+			
+	}
+	
+				$nid_result = db_select('node')
+				->fields('node', array('nid'))
+				->condition('uid', $puser->uid, '=')
+				->condition('type', 'user_profile_comment', '=')
+				->execute();
+				$nid = $nid_result->fetchCol();
+				
+				
+				
+				
+				$user_detail = array();
+				$result = db_select('comment')
+				->fields('comment', array('cid'))
+				->condition('nid', $nid[0], '=')
+				->condition('pid', 0, '=')
+				->orderBy('cid', 'DESC')
+				->execute();
+
+				$cids = $result->fetchCol();
+				//print_r($cids);die;
+				$comments=comment_load_multiple($cids);
+
+
+
+				//echo '<pre>';
+			//	print_r($comments);
+				$comm_keys =array_keys($comments);
+				$i=0;
+				$user_comments = array();
+				$word_c_count=0;
+				foreach($comments as $user_array)
+				{
+					//echo $user_array->u_uid;
+					$c_user = user_load($user_array->u_uid);
+						
+						
+						$user_comments[$i]['username']=$user_array->name;
+						$user_comments[$i]['uid']=$user_array->uid;
+
+						$p_comment = $user_array->comment_body['und'][0]['value'];
+						$string = substr($p_comment,0,50);
+						$string = substr($string,0,strrpos($string," "));
+						$user_comments[$i]['cid']=$user_array->cid;
+						$user_comments[$i]['nid']=$user_array->nid;
+						
+						//$user_detail[$i]['u_uid']=$comments[$key[0]]->u_uid;
+						if(str_word_count($user_array->comment_body['und'][0]['value']) >10)
+						{
+							$user_comments[$i]['comment']=$string;
+						}
+						else
+						{
+							$user_comments[$i]['comment']=$user_array->comment_body['und'][0]['value'];
+						}
+						$user_comments[$i]['comment']=$user_array->comment_body['und'][0]['value'];
+						$word_c_count += str_word_count($user_comments[$i]['comment']);
+						$user_comments[$i]['firstname']= ucfirst($c_user->field_first_name['und'][0]['value']);
+						$user_comments[$i]['lastname']= ucfirst($c_user->field_last_name['und'][0]['value']);
+						$user_comments[$i]['time']= date('m/d/Y H:i:s a',$c_user->created);
+						//print_r($c_user);die;
+						if($c_user->data['imagename'] !='')
+						{
+							$user_comments[$i]['image']= $bucket_url.'/'.$c_user->data['imagename'];
+						}
+
+						if($user_comments[$i]['image'] =='')
+						{
+						$profile_picture_url = ltrim(variable_get('user_picture_default', ''), '/'); //PATCH: using the ltrim to get rid of any leading '/'
+						$profile_picture_url    = file_create_url($profile_picture_url);
+						$user_comments[$i]['image']= $profile_picture_url;
+						}
+
+					$i++;
+					if($word_c_count>150 || $i==4)
+						break;
+				}
+				//print_r($user_comments);die;
+				//die;
+
+			$variables['user_profile']['u_comments']=$user_comments;
+			$variables['user_profile']['user_im']=$user_im;
+			$variables['user_profile']['status'][0]=get_puser_status($puser->uid);
+			//echo '<pre>';
+			//print_r($puser);die;
+	echo json_encode($variables);
+
+}
+
+
+function profile_new_theme($existing, $type, $theme, $path)
+{
+	$module_path = drupal_get_path('module', 'profile_new');
+	 return array(
+        'profile_new' => array(
+            'variables' => array('result' => 'testing'),
+            'template' => 'profile-new',
+            'arguments' => 'fields',
+            'path' => $module_path . '/templates',
+        ),
+	);
+}
+
+
